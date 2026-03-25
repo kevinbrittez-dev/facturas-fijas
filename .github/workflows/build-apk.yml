@@ -1,6 +1,5 @@
-name: Build APK
+name: Build APK (robusto - versión fija)
 
-# Ejecutar en push a main y en PRs hacia main
 on:
   push:
     branches: [ main ]
@@ -8,10 +7,9 @@ on:
     branches: [ main ]
 
 env:
-  # Opt-in a Node.js 24 para las actions que lo requieran (evita advertencias)
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  # Aseguramos variable para Android SDK
   ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+  JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF8"
 
 jobs:
   build:
@@ -20,27 +18,59 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java (required by Android toolchain)
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Flutter
+      - name: Install prerequisites
+        run: sudo apt-get update && sudo apt-get install -y unzip wget git
+
+      # --- Intento 1: usar acción para instalar Flutter con versión fija ---
+      - name: Setup Flutter (acción) - versión fija
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: 'stable'
-          channel: 'stable'
+          flutter-version: '3.13.0'   # <- fijar aquí una versión concreta y estable
+          cache: true
 
-      - name: Ensure Android SDK components
+      - name: Verificar Flutter (acción)
         run: |
-          sudo mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
-          # instalar command-line tools si no existen
-          if [ ! -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ]; then
-            sdkmanager --sdk_root=$ANDROID_SDK_ROOT --install "cmdline-tools;latest"
+          echo "PATH: $PATH"
+          flutter --version || true
+        continue-on-error: true
+
+      # --- Fallback: si flutter no está disponible, clonar SDK manualmente ---
+      - name: Fallback: instalar Flutter manualmente si flutter no existe
+        if: ${{ failure() || steps.setup_flutter.outcome == 'failure' || ! (hashFiles('**/pubspec.yaml')) }}
+        run: |
+          set -e
+          if ! command -v flutter >/dev/null 2>&1; then
+            echo "Flutter no encontrado: clonando SDK (fallback)..."
+            cd $HOME
+            if [ ! -d "$HOME/flutter" ]; then
+              git clone -b stable https://github.com/flutter/flutter.git --depth 1 flutter || true
+            fi
+            echo "$HOME/flutter/bin" >> $GITHUB_PATH
+            echo "$HOME/flutter/bin/cache/dart-sdk/bin" >> $GITHUB_PATH
+            flutter --version || true
+          else
+            echo "Flutter ya instalado"
           fi
-          sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-33" "build-tools;33.0.2"
-          yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
+
+      - name: Add Android tools to PATH
+        run: |
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
+
+      - name: Install Android SDK components and accept licenses
+        run: |
+          sudo mkdir -p $ANDROID_SDK_ROOT
+          sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-33" "build-tools;33.0.2" || true
+          yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses || true
+
+      - name: Flutter doctor (detallado)
+        run: flutter doctor -v
 
       - name: Flutter pub get
         run: flutter pub get
@@ -51,14 +81,21 @@ jobs:
       - name: Run tests
         run: flutter test || true
 
-      - name: Build APK (release)
-        run: flutter build apk --release
+      - name: Build APK (release, verbose)
+        run: |
+          set -o pipefail
+          flutter build apk --release --verbose 2>&1 | tee build_output.log
         env:
-          # Evitar problemas con gradle daemon en CI
-          JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF8"
+          JAVA_TOOL_OPTIONS: ${{ env.JAVA_TOOL_OPTIONS }}
 
-      - name: Upload APK artifact
+      - name: Upload APK artifact (si existe)
         uses: actions/upload-artifact@v4
         with:
           name: facturas-fijas-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Upload build logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: build_output.log
