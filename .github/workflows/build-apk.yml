@@ -1,10 +1,17 @@
 name: Build APK
 
+# Ejecutar en push a main y en PRs hacia main
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+
+env:
+  # Opt-in a Node.js 24 para las actions que lo requieran (evita advertencias)
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  # Aseguramos variable para Android SDK
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
 jobs:
   build:
@@ -13,12 +20,29 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Java (required by Android toolchain)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: 'stable'
+          channel: 'stable'
 
-      - name: Install dependencies
+      - name: Ensure Android SDK components
+        run: |
+          sudo mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+          # instalar command-line tools si no existen
+          if [ ! -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ]; then
+            sdkmanager --sdk_root=$ANDROID_SDK_ROOT --install "cmdline-tools;latest"
+          fi
+          sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-33" "build-tools;33.0.2"
+          yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
+
+      - name: Flutter pub get
         run: flutter pub get
 
       - name: Run analyzer
@@ -29,8 +53,11 @@ jobs:
 
       - name: Build APK (release)
         run: flutter build apk --release
+        env:
+          # Evitar problemas con gradle daemon en CI
+          JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF8"
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: facturas-fijas-apk
