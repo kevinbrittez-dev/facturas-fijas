@@ -1,9 +1,0 @@
-# Archivo de plantilla: android/local.properties.template
-# No subas local.properties al repositorio.
-# Copia este archivo a android/local.properties y ajusta la ruta del SDK en tu máquina local.
-
-# Ejemplo (Linux/macOS):
-# sdk.dir=/home/tu_usuario/Android/Sdk
-
-# Ejemplo (Windows):
-# sdk.dir=C:\\Users\\tu_usuario\\AppData\\Local\\Android\\Sdk

@@ -1,3 +1,0 @@
-// Archivo: android/settings.gradle
-rootProject.name = 'facturas_fijas'
-include ':app'
