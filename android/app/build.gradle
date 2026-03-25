@@ -1,0 +1,59 @@
+// Archivo: android/app/build.gradle (módulo app)
+
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+android {
+    compileSdkVersion 33
+
+    defaultConfig {
+        // Cambia applicationId si ya tienes otro paquete
+        applicationId "com.example.facturas_fijas"
+        minSdkVersion 21
+        targetSdkVersion 33
+        versionCode 1
+        versionName "1.0"
+        multiDexEnabled true
+    }
+
+    signingConfigs {
+        // Si quieres firmar en CI, configura aquí con variables/keystore
+        debug {}
+    }
+
+    buildTypes {
+        release {
+            // Por defecto usamos la signingConfig debug para evitar errores si no hay keystore.
+            // Para un APK final firmado, reemplaza por tu signingConfig con keystore real.
+            signingConfig signingConfigs.debug
+            minifyEnabled false
+            shrinkResources false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    // Opcional: evita problemas con recursos grandes en CI
+    packagingOptions {
+        resources {
+            excludes += ['/META-INF/*.kotlin_module']
+        }
+    }
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+    implementation 'com.google.android.material:material:1.8.0'
+    implementation 'androidx.multidex:multidex:2.0.1'
+}
