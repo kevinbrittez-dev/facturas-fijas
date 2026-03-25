@@ -1,4 +1,4 @@
-name: Build APK
+name: Build APK (con logs)
 
 on:
   push:
@@ -30,18 +30,22 @@ jobs:
           flutter-version: 'stable'
           channel: 'stable'
 
-      - name: Install Android SDK components
+      - name: Install tools (wget unzip)
+        run: sudo apt-get update -y && sudo apt-get install -y wget unzip
+
+      - name: Install Android command-line tools and SDK components
         run: |
-          sudo mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
-          sudo apt-get update -y
-          sudo apt-get install -y wget unzip
-          wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
-          unzip cmdline-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
-          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
+          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+          cd /tmp
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
+          unzip -q cmdline-tools.zip -d cmdline-tools-temp
+          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools/latest
+          mv cmdline-tools-temp/cmdline-tools/* $ANDROID_SDK_ROOT/cmdline-tools/latest/
+          rm -rf cmdline-tools.zip cmdline-tools-temp
           echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
           echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
-          sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-33" "build-tools;33.0.2"
           yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
+          sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-33" "build-tools;33.0.2"
 
       - name: Flutter doctor
         run: flutter doctor -v
@@ -55,11 +59,4 @@ jobs:
       - name: Run tests
         run: flutter test || true
 
-      - name: Build APK (release)
-        run: flutter build apk --release --verbose
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: facturas-fijas-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+      - name: Build APK (release, verbose) and save log
